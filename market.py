@@ -82,12 +82,12 @@ PROFESSION_SKILL_MAP = {
 }
 
 SKILL_URL_MAP = {
-    Skill.MAGIC: 'https://www.ezodus.net/charts/highscores/magic/all/{page}',
-    Skill.SHIELDING: 'https://www.ezodus.net/charts/highscores/shielding/all/{page}',
-    Skill.DISTANCE: 'https://www.ezodus.net/charts/highscores/distance/all/{page}',
-    Skill.SWORD: 'https://www.ezodus.net/charts/highscores/sword/knight/{page}',
-    Skill.AXE: 'https://www.ezodus.net/charts/highscores/axe/knight/{page}',
-    Skill.CLUB: 'https://www.ezodus.net/charts/highscores/club/knight/{page}',
+    Skill.MAGIC: 'https://www.ezodus.net/charts/highscores/magic/{profession}/{page}',
+    Skill.SHIELDING: 'https://www.ezodus.net/charts/highscores/shielding/{profession}/{page}',
+    Skill.DISTANCE: 'https://www.ezodus.net/charts/highscores/distance/{profession}/{page}',
+    Skill.SWORD: 'https://www.ezodus.net/charts/highscores/sword/{profession}/{page}',
+    Skill.AXE: 'https://www.ezodus.net/charts/highscores/axe/{profession}/{page}',
+    Skill.CLUB: 'https://www.ezodus.net/charts/highscores/club/{profession}/{page}',
 }
 
 HIGHSCORES_NAME_ID = 1
@@ -103,33 +103,46 @@ def find_highscores_rows(browser: WebDriver) -> List[WebElement]:
 def update_skills(browser: WebDriver, characters: List[Character]):
     character_map = {}
     character_skill_map = {}
+    character_profession_map = {}
     skill_character_map = defaultdict(set)
     for character in characters:
         character_map[character.name] = character
         skills = PROFESSION_SKILL_MAP.get(character.profession)
         character_skill_map[character.name] = skills
+        character_profession_map[character.name] = character.profession
         for skill in skills:
             skill_character_map[skill].add(character.name)
 
     for skill, url in SKILL_URL_MAP.items():
-        characters_to_update = skill_character_map.get(skill)
-        if not characters_to_update:
+        characters_by_skill = skill_character_map.get(skill)
+        if not characters_by_skill:
             continue
-        page_number = 0
-        while True:
-            page_url = url.replace('{page}', str(page_number))
-            browser.get(page_url)
-            rows = find_highscores_rows(browser)[1:]
-            if len(rows) == 0:
-                break
-            for row in rows:
-                cols = row.find_elements_by_tag_name('td')
-                name = cols[HIGHSCORES_NAME_ID].find_element_by_tag_name('a').text
-                value = int(cols[HIGHSCORES_VALUE_ID].text)
-                if name in characters_to_update:
-                    character = character_map.get(name)
-                    character.skills[skill] = value
-            page_number += 1
+        for profession in Profession.values():
+            characters_by_profession = {
+                character
+                for character in characters_by_skill
+                if character_profession_map.get(character) == profession
+            }
+            if not characters_by_profession:
+                continue
+            characters_to_update = characters_by_skill & characters_by_profession
+            if not characters_to_update:
+                continue
+            page_number = 0
+            while True:
+                page_url = url.replace('{page}', str(page_number)).replace('{profession}', profession.value)
+                browser.get(page_url)
+                rows = find_highscores_rows(browser)[1:]
+                if len(rows) == 0:
+                    break
+                for row in rows:
+                    cols = row.find_elements_by_tag_name('td')
+                    name = cols[HIGHSCORES_NAME_ID].find_element_by_tag_name('a').text
+                    value = int(cols[HIGHSCORES_VALUE_ID].text)
+                    if name in characters_to_update:
+                        character = character_map.get(name)
+                        character.skills[skill] = value
+                page_number += 1
 
 
 def save_auctions_to(auctions: List[Auction], excel_file: str = None, csv_file: str = None):
