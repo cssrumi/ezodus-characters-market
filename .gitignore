@@ -1,0 +1,5 @@
+venv/
+auctions.csv
+auctions.xlsx
+geckodriver.log
+.idea/
